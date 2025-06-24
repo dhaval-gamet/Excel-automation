@@ -444,6 +444,27 @@
       height: 400px;
     }
     
+    .progress-container {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      width: 200px;
+      height: 20px;
+      background: #f0f0f0;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      display: none;
+    }
+    
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.3s ease;
+    }
+    
     @media (max-width: 768px) {
       header {
         flex-direction: column;
@@ -487,6 +508,11 @@
       .table-container {
         max-height: 400px;
       }
+      
+      .progress-container {
+        width: 150px;
+        top: 120px;
+      }
     }
     
     @media (max-width: 480px) {
@@ -507,6 +533,11 @@
       .controls, .content {
         padding: 10px;
       }
+      
+      .progress-container {
+        width: 120px;
+        top: 140px;
+      }
     }
   </style>
 </head>
@@ -518,13 +549,13 @@
         <h1>Excel Smart Data Entry Tool</h1>
       </div>
       <nav>
-  <a href="index.html" class="btn btn-info" data-tippy-content="होम पेज पर जाएं">होम</a>
-  <a href="data-entry.html" class="btn btn-info" data-tippy-content="डेटा दर्ज करें">डेटा एंट्री</a>
-  <a href="file-upload.html" class="btn btn-info" data-tippy-content="फ़ाइल अपलोड करें">फ़ाइल अपलोड</a>
-  <a href="chart-view.html" class="btn btn-info" data-tippy-content="चार्ट देखें">चार्ट</a>
-  <a href="formatting.html" class="btn btn-info" data-tippy-content="सेल फॉर्मेट करें">फॉर्मेटिंग</a>
-  <a href="pivot-table.html" class="btn btn-info" data-tippy-content="सेल फॉर्मेट करें">pivot tebal</a>
-</nav>
+        <a href="index.html" class="btn btn-info" data-tippy-content="होम पेज पर जाएं">होम</a>
+        <a href="data-entry.html" class="btn btn-info" data-tippy-content="डेटा दर्ज करें">डेटा एंट्री</a>
+        <a href="file-upload.html" class="btn btn-info" data-tippy-content="फ़ाइल अपलोड करें">फ़ाइल अपलोड</a>
+        <a href="chart-view.html" class="btn btn-info" data-tippy-content="चार्ट देखें">चार्ट</a>
+        <a href="formatting.html" class="btn btn-info" data-tippy-content="सेल फॉर्मेट करें">फॉर्मेटिंग</a>
+        <a href="pivot-table.html" class="btn btn-info" data-tippy-content="पिवट टेबल बनाएं">पिवट टेबल</a>
+      </nav>
       <div class="stats">
         <div class="stat-item">
           <i class="fas fa-table"></i>
@@ -601,6 +632,9 @@
     <div class="notification" id="notification">
       <i class="fas fa-check-circle"></i>
       <span id="notificationText">सफलतापूर्वक शुरू किया गया!</span>
+    </div>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
     </div>
   </div>
 
@@ -766,16 +800,41 @@
       return true;
     }
 
+    // Show notification
+    function showNotification(message, isPersistent = false) {
+      if (!notification || !notificationText) return;
+
+      notificationText.textContent = message;
+      notification.classList.add('show');
+
+      if (!isPersistent) {
+        setTimeout(() => {
+          notification.classList.remove('show');
+        }, 3000);
+      }
+    }
+
     // Image OCR Handling
     imageInput.addEventListener('change', async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
-      showNotification('इमेज प्रोसेसिंग...');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+
+      showNotification('इमेज प्रोसेसिंग: 0%...', true);
 
       try {
         const { data: { text } } = await Tesseract.recognize(file, 'eng+hin', {
-          logger: (m) => console.log(m)
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              const progress = Math.round(m.progress * 100);
+              progressBar.style.width = `${progress}%`;
+              showNotification(`इमेज प्रोसेसिंग: ${progress}%...`, true);
+            }
+          }
         });
 
         const lines = text.split('\n').map(line => line.trim()).filter(line => line);
@@ -809,9 +868,11 @@
         showNotification('इमेज डेटा निकाला गया और तालिका में जोड़ा गया!');
       } catch (error) {
         logError('OCR त्रुटि:', error);
+        showNotification('त्रुटि: OCR प्रोसेसिंग विफल!', false);
+      } finally {
+        progressContainer.style.display = 'none';
+        imageInput.value = '';
       }
-
-      imageInput.value = '';
     });
 
     // CSV/Excel File Upload Handling
@@ -974,18 +1035,6 @@
       if (cellCount) {
         cellCount.textContent = (config.totalRows * config.totalCols).toString();
       }
-    }
-
-    // Show notification
-    function showNotification(message) {
-      if (!notification || !notificationText) return;
-
-      notificationText.textContent = message;
-      notification.classList.add('show');
-
-      setTimeout(() => {
-        notification.classList.remove('show');
-      }, 3000);
     }
 
     // Log errors
